@@ -23,7 +23,7 @@ export function CompareColumn({
 }: {
   label: string;
   initialAddress: string;
-  onAddressChange: (address: string) => void;
+  onAddressChange: (address: string, placeId?: string) => void;
 }) {
   const [result, setResult] = useState<LoadedReport | null>(null);
   const [errorState, setErrorState] = useState<{ address: string; message: string } | null>(null);

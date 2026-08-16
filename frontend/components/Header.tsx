@@ -1,7 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useAuth } from "./AuthProvider";
 
 export function Header() {
+  const { user, isLoading, logout, openLogin } = useAuth();
+
   return (
     <header
       className="sticky top-0 z-30 bg-[color:var(--surface-1)]/90 backdrop-blur"
@@ -23,6 +28,7 @@ export function Header() {
           />
           Streetwise
         </Link>
+
         <nav className="flex items-center gap-4 text-sm">
           <Link
             href="/compare"
@@ -30,15 +36,31 @@ export function Header() {
           >
             Compare
           </Link>
-          <span
-            className="rounded-full px-2.5 py-1 text-xs font-medium"
-            style={{
-              color: "var(--status-warning)",
-              background: "color-mix(in srgb, var(--status-warning) 12%, transparent)",
-            }}
-          >
-            Preview · sample data
-          </span>
+
+          {!isLoading && (
+            user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[color:var(--text-muted)]">
+                  {user.username}
+                </span>
+                <button
+                  onClick={logout}
+                  className="rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-[color:var(--gridline)]"
+                  style={{ borderColor: "var(--border-hairline)", color: "var(--text-secondary)" }}
+                >
+                  Log out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={openLogin}
+                className="rounded-full px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "var(--brand)" }}
+              >
+                Log in
+              </button>
+            )
+          )}
         </nav>
       </div>
     </header>

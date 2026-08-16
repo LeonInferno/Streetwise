@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Header } from "@/components/Header";
+import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,8 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>{mapsScriptSrc && <script async src={mapsScriptSrc} />}</head>
       <body className="min-h-full flex flex-col bg-[color:var(--background)] text-[color:var(--foreground)]">
-        <Header />
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
