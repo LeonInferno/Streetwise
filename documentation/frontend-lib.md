@@ -22,32 +22,49 @@ Calls `/api/autocomplete`. Returns `[]` immediately for an empty query;
 otherwise returns whatever the route responds with (real Google suggestions,
 or the local mock fallback — the client doesn't know or care which).
 
-### `fetchReport(lat, lng, address?)`
-
-The most important function to understand for "is what I'm looking at real":
+### `fetchReport(lat, lng)`
 
 ```ts
 try {
   res = await fetch(`${API_BASE_URL}/api/score`, { method: "POST", ... });
 } catch {
-  if (address) return buildReport(address);   // ← local mock, not the backend
   throw new Error("Couldn't reach the backend — is it running?");
 }
 ```
 
-`API_BASE_URL` is hardcoded to `http://localhost:3001`. **If that connection
-fails for any reason** (backend not running, wrong port, network error), this
-silently falls back to `mock-data.ts#buildReport(address)` — a fully
-populated, plausible-looking report that is entirely fake. It does **not**
-retry, and it does **not** show an error to the user in that case. A
-UI that "works" is therefore not proof the backend is actually being used —
-see [`../README.md`](../README.md#whats-real-vs-mockedstubbed-right-now) for
-the full breakdown of what's real vs. mocked.
+`API_BASE_URL` is hardcoded to `http://localhost:3001`. If that connection
+fails for any reason (backend not running, wrong port, network error), this
+**throws** and the report page shows the error.
+
+> **Changed:** this used to fall back to `mock-data.ts#buildReport(address)` —
+> a fully populated, entirely fake report — whenever the backend was
+> unreachable, which meant a working-looking UI was no proof the backend was
+> being used. That fallback is gone, along with the `address?` parameter that
+> existed only to feed it, and the dead `app/api/report/route.ts` route that
+> served the same mock. A backend outage now surfaces as an error.
+
+On a 401 with `error: "token_expired"` it attempts one token refresh and
+retries once; any other 401 triggers the login modal.
 
 If the backend *is* reachable, its real response is returned as-is — which
 notably does **not** include `recentComplaints` (see
 [Real backend response vs. what components expect](#real-backend-response-vs-what-components-expect)
 below).
+
+### `fetchExplanation(lat, lng, tier)`
+
+The slow path of the two-call AI explanation flow. `GET /api/explanation` with
+the bearer token, for `tier` of `"building"` or `"block"`.
+
+Returns the AI text, or **`null` whenever there is nothing to swap in** — a
+network failure, an auth failure, or the endpoint answering `200` with
+template text because the AI call failed server-side. It never throws;
+callers treat `null` as "keep the deterministic client-side copy".
+
+Only worth calling for a tier whose `/api/score` response came back with
+`explanationSource: "template"`. See
+[the AI explanation flow](./frontend-components.md#the-ai-explanation-flow)
+for how `ReportView` orchestrates this.
 
 ---
 

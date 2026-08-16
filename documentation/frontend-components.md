@@ -28,9 +28,59 @@ rendered inside an already-client tree.
 - **`VerdictBanner.tsx`** — the big Good/Fair/Poor headline + badge at the
   top of a report. Computes the overall band as the *worse* of Building
   Health and Block Quality (`lib/score.ts#overallBand`), and renders a
-  one-line explanation of *why* via `lib/score.ts#explainVerdict()` — pulls
-  the top 1–2 complaint categories that actually drove that band, plus how
-  many are still unresolved.
+  one-line explanation of *why* underneath.
+
+  That explanation area has **three states**, driven by the optional
+  `aiExplanation?: { loading, tiers }` prop:
+
+  | State | Shows |
+  |---|---|
+  | `loading: true` | `"Reasoning..."` (with `animate-pulse`) |
+  | `tiers` non-empty | one labeled line per tier — **Building Health** and **Block Quality** — each with its own text |
+  | `tiers` empty, or prop omitted | `lib/score.ts#explainVerdict()` — the deterministic client-side copy |
+
+  The prop is optional so `CompareColumn` — which never requests an AI
+  explanation — keeps the `explainVerdict` copy with no change. The fallback
+  is what guarantees this area is never empty and never shows an error.
+
+  **Both tiers always render, including template ones.** An earlier version
+  merged the tiers into one paragraph and dropped any that weren't AI-backed,
+  which in practice meant the Building Health line almost never appeared — see
+  the note on zero-complaint buildings below.
+
+### The AI explanation flow
+
+`/api/score` is the fast path and **always** returns deterministic template
+text so it can stay fast; a tier only reports `explanationSource: "ai"` once
+`GET /api/explanation` has been called for it and the result cached
+server-side. `ReportView` drives the swap:
+
+1. After the report renders, an effect checks both tiers. If **every** tier is
+   already `"ai"` (served from the backend's cache) it fires nothing — the
+   text is used directly, with no `"Reasoning..."` flash.
+2. Otherwise it calls `lib/api.ts#fetchExplanation()` for each `"template"`
+   tier in parallel, reusing any already-`"ai"` text rather than re-paying the
+   model latency for it.
+3. Results are kept **per tier**, not merged. Each tier renders its AI text if
+   it got one, and otherwise its own template text from `/api/score`. Only if
+   *no* tier has any text at all does the banner fall back to `explainVerdict`.
+
+> **Expect the Building Health tier to be template most of the time.** The
+> building radius is 25m, and `explain.js` deliberately refuses to ask the
+> model about a tier with zero complaints (llama3.1 described *zero*
+> complaints as "areas of concern"). Sampling 10 spread NYC coordinates, 9 had
+> zero building complaints — so `"template"` there is the normal case, not a
+> failure. This is why each tier falls back to its own template text rather
+> than being dropped from the list.
+
+Two implementation details worth preserving:
+
+- Only the *fetched* result is held in state, keyed by address so a slow
+  response cannot land on the next report; the loading/cached cases are
+  derived during render with `useMemo`. Setting state synchronously in the
+  effect body trips the `react-hooks/set-state-in-effect` lint rule.
+- Expect roughly 7s per tier against local Ollama, so this must stay
+  non-blocking with the template visible meanwhile.
 - **`ScorePanelCard.tsx`** — one full score panel (used twice per report:
   Building Health and Block Quality). Composes `ScoreMeter`, `StatusBadge`,
   `ComplaintBreakdownBars`, `TrendSparkline`, and `RecentComplaintsList`.

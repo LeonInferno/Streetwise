@@ -338,6 +338,11 @@ function buildScoreSection<K extends string>(
     radiusMeters,
     confidence: allZero ? "low" : "normal",
     confidenceReason: allZero ? "no_complaints_found" : null,
+    // Mock data is the offline fallback, so there is no AI text to offer. The
+    // empty string with source "template" is what makes the report fall back to
+    // the client-side explainVerdict copy instead of showing a blank line.
+    explanation: "",
+    explanationSource: "template",
     bucketScores,
     bucketConfidence: Object.fromEntries(
       lowConfidenceBuckets.map((cat) => [cat, "low" as const])
