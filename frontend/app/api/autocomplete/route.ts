@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findSuggestions } from "@/lib/mock-data";
 
+// Tight bounding box around the outer edges of the five boroughs (Staten
+// Island's western tip to the Bronx's northern tip, Staten Island's western
+// shore to eastern Queens). Used as a hard locationRestriction, not just a
+// bias, so results outside NYC don't show up at all.
+const NYC_BOUNDS = {
+  low: { latitude: 40.4957, longitude: -74.2557 }, // SW: Tottenville, Staten Island
+  high: { latitude: 40.9153, longitude: -73.7002 }, // NE: edge of the Bronx / eastern Queens
+};
+
+// Boroughs share the Hudson/harbor waterfront with NJ, so a lat/lng box
+// alone still lets a sliver of Jersey City/Bayonne through near Staten
+// Island. Google's predictions always end in ", <state abbr>, USA", so this
+// is a cheap, reliable second filter — no extra API call needed.
+function isNewYorkState(description: string): boolean {
+  return /,\s*NY,/.test(description);
+}
+
 // Google Places Autocomplete (New) API for real NYC address suggestions.
 // Falls back to local mock suggestions if no API key is configured, so the
 // search bar still works without Google Maps set up.
@@ -31,11 +48,8 @@ export async function GET(request: NextRequest) {
       body: JSON.stringify({
         input: q,
         includedRegionCodes: ["us"],
-        locationBias: {
-          circle: {
-            center: { latitude: 40.7128, longitude: -74.006 }, // NYC center
-            radius: 25000, // ~15 miles, covers the five boroughs
-          },
+        locationRestriction: {
+          rectangle: NYC_BOUNDS,
         },
       }),
     });
@@ -48,12 +62,12 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
     const suggestions = (data.suggestions ?? [])
-      .slice(0, 6)
       .map((s: any) => ({
         id: s.placePrediction?.placeId ?? "",
         description: s.placePrediction?.text?.text ?? "",
       }))
-      .filter((s: { id: string; description: string }) => s.description);
+      .filter((s: { id: string; description: string }) => s.description && isNewYorkState(s.description))
+      .slice(0, 6);
 
     return NextResponse.json({ suggestions });
   } catch (error) {
