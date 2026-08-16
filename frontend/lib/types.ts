@@ -22,11 +22,18 @@ export type BlockCounts = {
   streetCondition: number;
 };
 
+export type ExplanationSource = "ai" | "template";
+
 export interface ScoreSection<TCounts extends Record<string, number>> {
   score: number;
   band: ScoreBand;
   counts: TCounts;
   radiusMeters: number;
+  // /api/score always returns the deterministic template text so it can stay
+  // fast; a tier only reports "ai" once GET /api/explanation has been called
+  // for it and the result cached server-side.
+  explanation: string;
+  explanationSource: ExplanationSource;
   confidence: Confidence;
   confidenceReason: string | null;
   bucketScores: Partial<Record<keyof TCounts, number>>;

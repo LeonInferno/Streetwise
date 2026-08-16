@@ -1,4 +1,3 @@
-import { buildReport } from "./mock-data";
 import { getAccessToken, tryRefresh, triggerAuthError } from "./auth";
 import type { AutocompleteSuggestion, Complaint, ComplaintStatus, ReportResponse } from "./types";
 
@@ -83,6 +82,34 @@ export async function fetchNearbyComplaints(
   }
 }
 
+/**
+ * The SLOW path. Only worth calling for a tier whose /api/score response came
+ * back with explanationSource "template".
+ *
+ * Returns null whenever there is nothing to swap in — a network failure, an
+ * auth failure, or the endpoint answering 200 with template text because the
+ * AI call failed server-side. Callers treat null as "fall back to the
+ * client-side copy", so this never throws.
+ */
+export async function fetchExplanation(
+  lat: number,
+  lng: number,
+  tier: "building" | "block"
+): Promise<string | null> {
+  const token = getAccessToken();
+  const url = `${API_BASE_URL}/api/explanation?lat=${lat}&lng=${lng}&tier=${tier}`;
+  try {
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.explanationSource === "ai" && data.explanation ? data.explanation : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchSuggestions(
   query: string,
   signal?: AbortSignal
@@ -109,14 +136,13 @@ async function scoreRequest(lat: number, lng: number, token: string | null): Pro
   });
 }
 
-export async function fetchReport(lat: number, lng: number, address?: string): Promise<ReportResponse> {
+export async function fetchReport(lat: number, lng: number): Promise<ReportResponse> {
   const token = getAccessToken();
 
   let res: Response;
   try {
     res = await scoreRequest(lat, lng, token);
   } catch {
-    if (address) return buildReport(address);
     throw new Error("Couldn't reach the backend — is it running?");
   }
 
@@ -128,7 +154,6 @@ export async function fetchReport(lat: number, lng: number, address?: string): P
         try {
           res = await scoreRequest(lat, lng, newToken);
         } catch {
-          if (address) return buildReport(address);
           throw new Error("Couldn't reach the backend — is it running?");
         }
         if (res.ok) return res.json();

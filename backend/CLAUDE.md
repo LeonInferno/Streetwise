@@ -342,11 +342,27 @@ api/index.js   Vercel serverless entrypoint (wraps Express app)
 2. Exact geolocation column name for within_circle (the geo-typed column, not the
    separate latitude/longitude text fields). Check via a single-row pull:
    `erm2-nwe9.json?$limit=1` and inspect field types on the dataset's About page.
-3. Null-geocoding rate PER bucket (not per raw string — check at the bucket level
-   since that's what scoring actually uses). Sample a few hundred rows each.
-   Noise and parking usually well-geocoded; plumbing/unsanitary may be spottier.
-   If a bucket is mostly null, that sub-score is unreliable; drop it or fall back
-   to geocoding by incident_address.
+3. ~~Null-geocoding rate PER bucket~~ — RESOLVED for the Building Health buckets.
+   Measured against live `erm2-nwe9` over the trailing 24 months, counting
+   `location IS NOT NULL` (the geo column `within_circle` actually uses):
+
+   | complaint_type | total | geocoded | missing |
+   |---|---|---|---|
+   | HEAT/HOT WATER | 651,313 | 651,263 | 50 (0.008%) |
+   | UNSANITARY CONDITION | 247,974 | 247,954 | 20 (0.008%) |
+   | PLUMBING | 149,848 | 149,835 | 13 (0.009%) |
+
+   The concern that plumbing/unsanitary would be spottier than noise/parking is
+   NOT borne out — all three are >99.99% geocoded. No fallback to
+   `incident_address` is needed. **Block Quality buckets still unmeasured.**
+
+   Consequence worth knowing: zero building counts are therefore REAL data, not
+   a geocoding artifact. At a 25m radius, 9 of 10 sampled NYC coordinates had
+   zero building complaints — citywide there are only ~0.65 heat complaints per
+   building over 24 months. This is what makes the Building Health explanation
+   land on the template path at nearly every address (see explain.js's
+   deliberate zero-complaint short-circuit), and it is the strongest argument
+   for revisiting the 25m radius in open item 5.
 4. Dataset title has changed over time on the Socrata page (same UID). Confirm
    current title + date range on the dataset page.
 5. Tight building radius may bleed into adjacent buildings on dense blocks. Person 3

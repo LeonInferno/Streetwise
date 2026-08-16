@@ -180,15 +180,20 @@ in the UI is backed by the real data pipeline yet:
 |---|---|
 | Building Health / Block Quality scores + per-category counts | **Yes**, once the backend is running (`POST /api/score` hits live 311 data) |
 | Address search, autocomplete, interactive map | **Yes**, via Google Maps APIs |
-| Per-score "why" explanation text | **Partially** — AI-generated via Ollama/Gemini when a provider is configured, otherwise a deterministic (but still accurate) template. Either way it's derived from the real counts, never fabricated. |
-| "Recent Complaints" list on each report | **No** — `/api/score` doesn't return individual complaint records, only aggregate counts. This list currently only ever comes from the frontend's mock generator. The backend does have `GET /api/complaints` (individual points, built for a heatmap) that isn't wired to this list yet. |
+| Per-score "why" explanation text | **Yes** — AI-generated via Ollama/Gemini when a provider is configured and reachable, otherwise a deterministic (but still accurate) template. Either way it's derived from the real counts, never fabricated. The report banner now actually requests and displays the AI text (`GET /api/explanation`); it previously ignored it and always showed the client-side `explainVerdict` copy. |
+| "Recent Complaints" list on each report | **Yes** — `ReportView` populates each panel's `recentComplaints` from `GET /api/complaints` (real individual 311 records). Note `/api/score` itself still returns only aggregate counts, so a component handed a raw `/api/score` response sees no complaint list. |
 | Complaint status timeline (Open → In Progress → Closed) | **No** — 311 doesn't expose per-complaint status history at all. Explicitly labeled stub (`buildComplaintTimeline` in `frontend/lib/mock-data.ts`) that synthesizes a plausible timeline from a complaint's date + current status. |
 | Comment/reply threads on complaints, "Building Admin" role | **No** — no backend support exists or is planned. Seeded + session-local only; the admin role is a UI checkbox, not real auth. |
 
-**Trust the scores. Don't trust the complaint list, timeline, or comments as
-real 311 records** — they're intentionally-scoped UI stubs with data shapes
-already matching what a real implementation would need, ready to swap in
-real data later without a redesign.
+**Trust the scores and the complaint list. Don't trust the timeline or
+comments as real 311 records** — those two remain intentionally-scoped UI
+stubs with data shapes already matching what a real implementation would
+need, ready to swap in real data later without a redesign.
+
+**A working-looking report is now proof the backend is real.** `fetchReport()`
+used to fall back to a fully fake `mock-data.ts` report whenever the backend
+was unreachable, which made an outage indistinguishable from success. That
+fallback has been removed — a backend that is down now shows an error.
 
 ---
 
