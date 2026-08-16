@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { AddressSearch } from "@/components/AddressSearch";
 import { FeaturedCarousel } from "@/components/FeaturedCarousel";
@@ -154,6 +155,13 @@ export default function Home() {
       </section>
 
       <footer className="mx-auto max-w-5xl px-4 py-10 text-center text-xs text-[color:var(--text-muted)] sm:px-6">
+        <Image
+          src="/logo-full.png"
+          alt="Streetwise — Rent smart in NYC"
+          width={907}
+          height={301}
+          className="mx-auto mb-6 h-auto w-[280px]"
+        />
         <p>
           Data source: NYC 311 Service Requests (Socrata, dataset erm2-nwe9). This
           preview uses generated sample data — live backend integration is next.

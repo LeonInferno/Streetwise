@@ -1,5 +1,5 @@
+import Image from "next/image";
 import Link from "next/link";
-import { BlockIcon } from "./icons";
 
 export function Header() {
   return (
@@ -12,12 +12,15 @@ export function Header() {
           href="/"
           className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight text-[color:var(--text-primary)]"
         >
-          <span
-            className="flex h-8 w-8 items-center justify-center rounded-[10px] text-white"
-            style={{ background: "var(--brand)", boxShadow: "var(--shadow-sm)" }}
-          >
-            <BlockIcon className="h-4.5 w-4.5" />
-          </span>
+          <Image
+            src="/logo-icon.png"
+            alt=""
+            width={36}
+            height={36}
+            className="rounded-[10px]"
+            style={{ boxShadow: "var(--shadow-sm)" }}
+            priority
+          />
           Streetwise
         </Link>
         <nav className="flex items-center gap-4 text-sm">
