@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { fetchReport, getLatLng } from "@/lib/api";
+import { fetchNearbyComplaints, fetchReport, getLatLng } from "@/lib/api";
 import { AddressSearch } from "./AddressSearch";
 import { MapPanel } from "./MapPanel";
 import { ReportSkeleton } from "./ReportSkeleton";
@@ -22,6 +22,7 @@ interface LoadedReport {
 export function ReportView() {
   const searchParams = useSearchParams();
   const address = searchParams.get("address") ?? "";
+  const placeId = searchParams.get("placeId") ?? undefined;
   const [result, setResult] = useState<LoadedReport | null>(null);
   const [errorState, setErrorState] = useState<{ address: string; message: string } | null>(null);
 
@@ -30,9 +31,19 @@ export function ReportView() {
     let cancelled = false;
     (async () => {
       try {
-        const coords = await getLatLng(address);
+        const coords = await getLatLng(address, placeId);
         if (!coords) throw new Error("Couldn't locate that address.");
         const data = await fetchReport(coords.lat, coords.lng, address);
+
+        // Fetch recent complaint points for both panels in parallel so the
+        // "Recent Complaints" section and comments feature are populated.
+        const [buildingComplaints, blockComplaints] = await Promise.all([
+          fetchNearbyComplaints(coords.lat, coords.lng, data.buildingHealth.radiusMeters),
+          fetchNearbyComplaints(coords.lat, coords.lng, data.blockQuality.radiusMeters),
+        ]);
+        data.buildingHealth.recentComplaints = buildingComplaints;
+        data.blockQuality.recentComplaints = blockComplaints;
+
         if (cancelled) return;
         setResult({ address, lat: coords.lat, lng: coords.lng, data });
       } catch (e) {
@@ -43,7 +54,7 @@ export function ReportView() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, placeId]);
 
   const report = result?.address === address ? result : null;
   const error = errorState?.address === address ? errorState.message : null;

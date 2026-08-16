@@ -1,5 +1,6 @@
 import { buildReport } from "./mock-data";
-import type { AutocompleteSuggestion, ReportResponse } from "./types";
+import { getAccessToken, tryRefresh, triggerAuthError } from "./auth";
+import type { AutocompleteSuggestion, Complaint, ComplaintStatus, ReportResponse } from "./types";
 
 // Geocoding (via /api/geocode, Google under the hood) can return zero
 // results whenever a unit designator — apt/unit/suite/floor/room/# — is
@@ -26,10 +27,20 @@ async function geocode(query: string): Promise<{ lat: number; lng: number } | nu
   return { lat: data.lat, lng: data.lng };
 }
 
-// Thin client for the app's own /api/* routes. Today those routes return
-// mock data; once the real backend exists, either point these at it
-// directly or keep them as a same-origin proxy — callers don't change.
-export async function getLatLng(address: string): Promise<{ lat: number; lng: number } | null> {
+async function geocodeByPlaceId(placeId: string): Promise<{ lat: number; lng: number } | null> {
+  const res = await fetch(`/api/geocode?placeId=${encodeURIComponent(placeId)}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (typeof data.lat !== "number" || typeof data.lng !== "number") return null;
+  return { lat: data.lat, lng: data.lng };
+}
+
+export async function getLatLng(address: string, placeId?: string): Promise<{ lat: number; lng: number } | null> {
+  if (placeId) {
+    const result = await geocodeByPlaceId(placeId);
+    if (result) return result;
+  }
+
   const trimmed = address.trim();
   const result = await geocode(trimmed);
   if (result) return result;
@@ -37,6 +48,39 @@ export async function getLatLng(address: string): Promise<{ lat: number; lng: nu
   const stripped = stripUnit(trimmed);
   if (stripped && stripped !== trimmed) return geocode(stripped);
   return null;
+}
+
+function mapStatus(raw: string | undefined): ComplaintStatus {
+  const s = (raw ?? "").toLowerCase();
+  if (s === "closed") return "closed";
+  if (s.includes("progress") || s === "pending") return "in-progress";
+  return "open";
+}
+
+export async function fetchNearbyComplaints(
+  lat: number,
+  lng: number,
+  radius: number,
+  limit = 25
+): Promise<Complaint[]> {
+  const token = getAccessToken();
+  const url = `${API_BASE_URL}/api/complaints?lat=${lat}&lng=${lng}&radius=${radius}&limit=${limit}`;
+  try {
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return [];
+    const points: Array<{ type: string; lat: number; lng: number; created_date: string; status: string }> =
+      await res.json();
+    return points.map((p, i) => ({
+      id: `${p.type}-${p.created_date}-${i}`,
+      label: p.type,
+      date: p.created_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+      status: mapStatus(p.status),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchSuggestions(
@@ -54,17 +98,44 @@ export async function fetchSuggestions(
 
 const API_BASE_URL = "http://localhost:3001";
 
+async function scoreRequest(lat: number, lng: number, token: string | null): Promise<Response> {
+  return fetch(`${API_BASE_URL}/api/score`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ lat, lng }),
+  });
+}
+
 export async function fetchReport(lat: number, lng: number, address?: string): Promise<ReportResponse> {
+  const token = getAccessToken();
+
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/api/score`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lat, lng }),
-    });
+    res = await scoreRequest(lat, lng, token);
   } catch {
     if (address) return buildReport(address);
     throw new Error("Couldn't reach the backend — is it running?");
+  }
+
+  if (res.status === 401) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error === "token_expired") {
+      const newToken = await tryRefresh();
+      if (newToken) {
+        try {
+          res = await scoreRequest(lat, lng, newToken);
+        } catch {
+          if (address) return buildReport(address);
+          throw new Error("Couldn't reach the backend — is it running?");
+        }
+        if (res.ok) return res.json();
+      }
+    }
+    triggerAuthError();
+    throw new Error("Please log in to view reports.");
   }
 
   if (!res.ok) {

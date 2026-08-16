@@ -36,7 +36,7 @@ export function AddressSearch({
   autoFocus?: boolean;
   placeholder?: string;
   initialValue?: string;
-  onSelect?: (address: string) => void;
+  onSelect?: (address: string, placeId?: string) => void;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialValue);
@@ -69,16 +69,18 @@ export function AddressSearch({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  function go(address: string) {
+  function go(address: string, placeId?: string) {
     const trimmed = address.trim();
     if (!trimmed) return;
     saveRecentSearch(trimmed);
     setOpen(false);
     setQuery(trimmed);
     if (onSelect) {
-      onSelect(trimmed);
+      onSelect(trimmed, placeId);
     } else {
-      router.push(`/report?address=${encodeURIComponent(trimmed)}`);
+      const params = new URLSearchParams({ address: trimmed });
+      if (placeId) params.set("placeId", placeId);
+      router.push(`/report?${params.toString()}`);
     }
   }
 
@@ -95,7 +97,8 @@ export function AddressSearch({
       setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      go(activeIdx >= 0 ? suggestions[activeIdx].description : query);
+      const active = activeIdx >= 0 ? suggestions[activeIdx] : null;
+      go(active?.description ?? query, active?.id || undefined);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
@@ -142,7 +145,7 @@ export function AddressSearch({
                   <li key={s.id}>
                     <button
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => go(s.description)}
+                      onClick={() => go(s.description, s.id || undefined)}
                       className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors"
                       style={{
                         background: i === activeIdx ? "var(--gridline)" : "transparent",
