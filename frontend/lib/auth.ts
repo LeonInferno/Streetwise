@@ -1,7 +1,7 @@
 const TOKEN_KEY = "sw.accessToken";
 const REFRESH_KEY = "sw.refreshToken";
 
-export const AUTH_BASE = "http://localhost:3001";
+export const AUTH_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export type UserRole = "tenant" | "landlord";
 
