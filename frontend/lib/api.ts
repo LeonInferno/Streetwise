@@ -123,7 +123,10 @@ export async function fetchSuggestions(
   return data.suggestions ?? [];
 }
 
-const API_BASE_URL = "http://localhost:3001";
+// Falls back to localhost for local dev; the deployed frontend needs
+// NEXT_PUBLIC_API_URL set in its environment, since the browser (not a
+// server) makes this request and can't reach the developer's machine.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 async function scoreRequest(lat: number, lng: number, token: string | null): Promise<Response> {
   return fetch(`${API_BASE_URL}/api/score`, {
