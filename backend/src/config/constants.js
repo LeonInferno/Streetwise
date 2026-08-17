@@ -331,77 +331,9 @@ export const EXPLANATION_SOURCES = {
 // Auth
 // ---------------------------------------------------------------------------
 
-export const USERS_COLLECTION = "users";
-export const SESSIONS_COLLECTION = "auth_sessions";
-
-/**
- * Account roles, chosen at registration. A tenant is looking at somewhere to
- * live; a landlord is looking at somewhere they own.
- *
- * Currently identity only — no endpoint branches on it yet. It is carried in
- * the access token so that when one does, the role is already there and no
- * extra lookup is needed.
- */
-export const USER_ROLES = {
-  tenant: "tenant",
-  landlord: "landlord",
-};
-
-export const USER_ROLE_VALUES = Object.values(USER_ROLES);
-
-/**
- * Access-token lifetime. 7 days is the product requirement, not a security
- * recommendation — it is long for a bearer token, which is exactly why every
- * access token carries a `sid` and is checked against a live session document
- * (see providers/sessions.js). Logout deletes the session, so a stolen or
- * signed-out token stops working immediately instead of six days later.
- */
-export const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
-
-/**
- * Refresh-token lifetime. Longer than the access token, or refreshing would be
- * pointless — the refresh token has to outlive what it refreshes.
- */
-export const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
-
-/** Bytes of entropy in a refresh token. 32 = 256 bits, well past guessable. */
-export const REFRESH_TOKEN_BYTES = 32;
-
-export const JWT_ALGORITHM = "HS256";
-export const JWT_ISSUER = "should-i-live-here";
-
-/** Distinguishes our access tokens from anything else signed with the secret. */
-export const ACCESS_TOKEN_TYPE = "access";
-
-/**
- * scrypt parameters for password hashing. N=16384 is the Node default and takes
- * ~50-100ms per hash on typical hardware — slow enough to make offline cracking
- * expensive, fast enough that login does not feel broken.
- */
-export const SCRYPT_PARAMS = {
-  N: 16384,
-  r: 8,
-  p: 1,
-  keyLength: 64,
-  saltBytes: 16,
-};
-
-/**
- * Username rules. Deliberately narrow: usernames are stored lowercased and used
- * as a unique key, so allowing case or unicode lookalikes would let two accounts
- * collide in the user's head while staying distinct in the database.
- */
-export const USERNAME_MIN_LENGTH = 3;
-export const USERNAME_MAX_LENGTH = 32;
-export const USERNAME_PATTERN = /^[a-z0-9_.-]+$/;
-
-/**
- * Password length bounds. The upper bound is not a strength rule — it caps how
- * much data an unauthenticated caller can make us run scrypt over, which is
- * otherwise a free way to burn our CPU.
- */
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 200;
+// Sign-up, login, sessions, and roles (tenant/landlord, in user_metadata) are
+// all owned by Supabase now — see providers/supabase.js and
+// middleware/requireAuth.js. Nothing about an account lives in this app.
 
 // ---------------------------------------------------------------------------
 // Input validation

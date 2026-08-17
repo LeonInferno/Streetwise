@@ -3,7 +3,6 @@ import { healthRouter } from "./routes/health.js";
 import { scoreRouter } from "./routes/score.js";
 import { complaintsRouter } from "./routes/complaints.js";
 import { explanationRouter } from "./routes/explanation.js";
-import { authRouter } from "./routes/auth.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { HttpError } from "./lib/errors.js";
 import { BadRequestError } from "./lib/validate.js";
@@ -39,17 +38,11 @@ export function createApp() {
   // have no credentials, and a 401 there reads to the host as a failed deploy.
   // It exposes only "the process is up", which is not worth protecting.
   app.use(healthRouter);
-  // Token issuance cannot itself require a token.
-  app.use(authRouter);
 
   // --- protected -----------------------------------------------------------
-  // Everything below needs `Authorization: Bearer <accessToken>`.
-  //
-  // NOTE FOR PERSON 2: this is a BREAKING change to the frozen contract in
-  // CLAUDE.md. /api/score, /api/complaints, and /api/explanation now 401
-  // without a token. The response shapes are otherwise untouched — the only
-  // frontend change needed is logging in and attaching the header. See
-  // documentation/m7-auth.md.
+  // Everything below needs `Authorization: Bearer <accessToken>`, issued by
+  // Supabase on the frontend. requireAuth verifies it against Supabase's Auth
+  // server; this app never issues or stores a credential itself.
   app.use(requireAuth);
   app.use(scoreRouter);
   app.use(complaintsRouter);
@@ -81,14 +74,6 @@ export function createApp() {
         error: "upstream_unavailable",
         details: "NYC Open Data is not responding; try again shortly.",
       });
-    }
-
-    // Auth is misconfigured (no JWT_SECRET). That is our bug, not the caller's,
-    // and it must be loud in the logs — but the client gets a bare 500, since
-    // the message names the missing variable.
-    if (err?.name === "AuthConfigError") {
-      console.error("[auth] misconfigured:", err.message);
-      return res.status(500).json({ error: "internal_error" });
     }
 
     // Ours: BadRequestError (400) from the validator and HttpError subclasses

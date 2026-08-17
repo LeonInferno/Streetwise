@@ -3,15 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Header } from "./Header";
 import { LoginModal } from "./LoginModal";
+import { supabase } from "@/lib/supabaseClient";
 import {
-  apiLogin,
-  apiLogout,
-  apiMe,
-  apiRegister,
-  clearTokens,
-  getAccessToken,
+  getCurrentUser,
   setAuthErrorCallback,
-  storeTokens,
+  signInWithGoogle,
+  signInWithPassword,
+  signOut,
+  signUpWithPassword,
   type AuthUser,
   type UserRole,
 } from "@/lib/auth";
@@ -19,8 +18,9 @@ import {
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, role: UserRole) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, role: UserRole) => Promise<{ needsEmailConfirmation: boolean }>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   openLogin: () => void;
 }
@@ -29,7 +29,8 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   login: async () => {},
-  register: async () => {},
+  register: async () => ({ needsEmailConfirmation: false }),
+  loginWithGoogle: async () => {},
   logout: async () => {},
   openLogin: () => {},
 });
@@ -43,59 +44,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
 
-  // On mount: restore session from localStorage
+  // On mount: restore any existing session, then keep `user` in sync with
+  // every subsequent auth event (login, logout, token refresh, and the
+  // redirect back from Google OAuth all land here).
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-    apiMe(token)
+    getCurrentUser()
       .then(setUser)
-      .catch(() => clearTokens())
       .finally(() => setIsLoading(false));
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(
+        session?.user
+          ? { id: session.user.id, email: session.user.email ?? "", role: session.user.user_metadata?.role === "landlord" ? "landlord" : "tenant" }
+          : null
+      );
+      setIsLoading(false);
+    });
+
+    return () => subscription.subscription.unsubscribe();
   }, []);
 
   // Register the callback so API functions can trigger the login modal
   useEffect(() => {
-    setAuthErrorCallback(() => {
-      setUser(null);
-      setShowLogin(true);
-    });
+    setAuthErrorCallback(() => setShowLogin(true));
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const pair = await apiLogin(username, password);
-    storeTokens(pair);
-    setUser(pair.user);
+  const login = useCallback(async (email: string, password: string) => {
+    setUser(await signInWithPassword(email, password));
   }, []);
 
-  const register = useCallback(
-    async (username: string, password: string, role: UserRole) => {
-      const pair = await apiRegister(username, password, role);
-      storeTokens(pair);
-      setUser(pair.user);
-    },
-    []
-  );
+  const register = useCallback(async (email: string, password: string, role: UserRole) => {
+    const { user: newUser, needsEmailConfirmation } = await signUpWithPassword(email, password, role);
+    if (newUser) setUser(newUser);
+    return { needsEmailConfirmation };
+  }, []);
+
+  const loginWithGoogle = useCallback(async () => {
+    await signInWithGoogle();
+  }, []);
 
   const logout = useCallback(async () => {
-    const token = getAccessToken();
-    if (token) await apiLogout(token);
-    clearTokens();
+    await signOut();
     setUser(null);
   }, []);
 
   const openLogin = useCallback(() => setShowLogin(true), []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, openLogin }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, loginWithGoogle, logout, openLogin }}>
       <Header />
       {children}
       {showLogin && !user && (
         <LoginModal
           onLogin={login}
           onRegister={register}
+          onGoogleLogin={loginWithGoogle}
           onSuccess={() => setShowLogin(false)}
         />
       )}

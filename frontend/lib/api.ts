@@ -1,4 +1,4 @@
-import { getAccessToken, tryRefresh, triggerAuthError } from "./auth";
+import { getAccessToken, triggerAuthError } from "./auth";
 import type { AutocompleteSuggestion, Complaint, ComplaintStatus, ReportResponse } from "./types";
 
 // Geocoding (via /api/geocode, Google under the hood) can return zero
@@ -62,7 +62,7 @@ export async function fetchNearbyComplaints(
   radius: number,
   limit = 25
 ): Promise<Complaint[]> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const url = `${API_BASE_URL}/api/complaints?lat=${lat}&lng=${lng}&radius=${radius}&limit=${limit}`;
   try {
     const res = await fetch(url, {
@@ -96,7 +96,7 @@ export async function fetchExplanation(
   lng: number,
   tier: "building" | "block"
 ): Promise<string | null> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const url = `${API_BASE_URL}/api/explanation?lat=${lat}&lng=${lng}&tier=${tier}`;
   try {
     const res = await fetch(url, {
@@ -140,7 +140,7 @@ async function scoreRequest(lat: number, lng: number, token: string | null): Pro
 }
 
 export async function fetchReport(lat: number, lng: number): Promise<ReportResponse> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
 
   let res: Response;
   try {
@@ -150,18 +150,9 @@ export async function fetchReport(lat: number, lng: number): Promise<ReportRespo
   }
 
   if (res.status === 401) {
-    const body = await res.json().catch(() => ({}));
-    if (body.error === "token_expired") {
-      const newToken = await tryRefresh();
-      if (newToken) {
-        try {
-          res = await scoreRequest(lat, lng, newToken);
-        } catch {
-          throw new Error("Couldn't reach the backend — is it running?");
-        }
-        if (res.ok) return res.json();
-      }
-    }
+    // supabase-js keeps the access token fresh in the background, so a 401
+    // here means the session is genuinely gone (never logged in, signed out
+    // elsewhere, or revoked) rather than a routine expiry to retry.
     triggerAuthError();
     throw new Error("Please log in to view reports.");
   }

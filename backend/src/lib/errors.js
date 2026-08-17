@@ -32,7 +32,7 @@ export class ConflictError extends HttpError {
 }
 
 /**
- * 503 — auth cannot run at all (no Mongo, no JWT_SECRET). Distinct from 401 on
+ * 503 — auth cannot run at all (no Mongo, no Supabase config). Distinct from 401 on
  * purpose: 401 tells a client to log in again, which would not help here.
  */
 export class ServiceUnavailableError extends HttpError {

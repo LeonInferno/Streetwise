@@ -21,8 +21,8 @@
     "node": ">=20.6"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.3",
     "mongodb": "^6.20.0"
   },
   "devDependencies": {

@@ -10,9 +10,11 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-    # Passes SOCRATA_APP_TOKEN / GEMINI_API_KEY through from the gitignored
-    # .env without committing them. required:false so a teammate with no .env
-    # still gets a working (throttled, template-explanation) backend.
+    # Passes SOCRATA_APP_TOKEN / GEMINI_API_KEY / SUPABASE_* through from the
+    # gitignored .env without committing them. required:false so a teammate
+    # with no .env still gets a working (throttled, template-explanation)
+    # backend — though it will exit immediately without SUPABASE_URL /
+    # SUPABASE_SECRET_KEY, since auth is not optional.
     env_file:
       - path: .env
         required: false
@@ -24,11 +26,10 @@ services:
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DB: ${MONGODB_DB:-should-i-live-here}
       # `:?` makes compose refuse to start with a readable message instead of
-      # booting a container that exits on the missing secret. Interpolated from
-      # the gitignored .env, so no secret is committed here. There is no dev
-      # default on purpose — a shared fallback secret is one copy-paste away
-      # from being the production one.
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env — see .env.example for how to generate one}
+      # booting a container that exits on the missing var. Interpolated from
+      # the gitignored .env, so no secret is committed here.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env — see .env.example}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:?set SUPABASE_SECRET_KEY in .env — see .env.example}
       # No Ollama container by design. If `ollama serve` is running on the
       # host this reaches it; if it is not, explain.js catches the connection
       # refusal and serves deterministic template text. Set AI_PROVIDER=gemini

@@ -41,7 +41,7 @@ export function Header() {
             user ? (
               <div className="flex items-center gap-3">
                 <span className="text-xs text-[color:var(--text-muted)]">
-                  {user.username}
+                  {user.email}
                 </span>
                 <button
                   onClick={logout}

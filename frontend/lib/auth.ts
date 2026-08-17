@@ -1,23 +1,26 @@
-const TOKEN_KEY = "sw.accessToken";
-const REFRESH_KEY = "sw.refreshToken";
-
-export const AUTH_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "./supabaseClient";
 
 export type UserRole = "tenant" | "landlord";
 
 export interface AuthUser {
   id: string;
-  username: string;
+  email: string;
   role: UserRole;
 }
 
-export interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-  user: AuthUser;
+function toAuthUser(user: User | null | undefined): AuthUser | null {
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email ?? "",
+    role: user.user_metadata?.role === "landlord" ? "landlord" : "tenant",
+  };
 }
 
-// Set by AuthProvider so API functions can trigger the login modal.
+// Set by AuthProvider so API functions can trigger the login modal when a
+// request comes back 401 (supabase-js auto-refreshes the token in the
+// background, so this is only reached once a session is genuinely gone).
 let _onAuthError: (() => void) | null = null;
 export function setAuthErrorCallback(fn: () => void) {
   _onAuthError = fn;
@@ -26,86 +29,53 @@ export function triggerAuthError() {
   _onAuthError?.();
 }
 
-export function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+/** Current access token, or null if signed out. */
+export async function getAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
 }
 
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(REFRESH_KEY);
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const { data } = await supabase.auth.getSession();
+  return toAuthUser(data.session?.user);
 }
 
-export function storeTokens(pair: Pick<TokenPair, "accessToken" | "refreshToken">) {
-  localStorage.setItem(TOKEN_KEY, pair.accessToken);
-  localStorage.setItem(REFRESH_KEY, pair.refreshToken);
+export async function signInWithPassword(email: string, password: string): Promise<AuthUser> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+  const user = toAuthUser(data.user);
+  if (!user) throw new Error("Login failed");
+  return user;
 }
 
-export function clearTokens() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-}
-
-async function authPost(path: string, body: unknown, token?: string): Promise<Response> {
-  return fetch(`${AUTH_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-export async function apiLogin(username: string, password: string): Promise<TokenPair> {
-  const res = await authPost("/api/auth/login", { username, password });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.details ?? data.error ?? "Login failed");
-  return data;
-}
-
-export async function apiRegister(
-  username: string,
+/**
+ * Returns `user: null` when the project has "Confirm email" enabled — Supabase
+ * creates the account but withholds a session until the confirmation link is
+ * clicked, so there is nothing to log the caller into yet.
+ */
+export async function signUpWithPassword(
+  email: string,
   password: string,
   role: UserRole
-): Promise<TokenPair> {
-  const res = await authPost("/api/auth/register", { username, password, role });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.details ?? data.error ?? "Registration failed");
-  return data;
-}
-
-export async function apiRefresh(refreshToken: string): Promise<TokenPair> {
-  const res = await authPost("/api/auth/refresh", { refreshToken });
-  if (!res.ok) throw new Error("Session expired");
-  return res.json();
-}
-
-export async function apiLogout(accessToken: string): Promise<void> {
-  await authPost("/api/auth/logout", {}, accessToken).catch(() => {});
-}
-
-export async function apiMe(accessToken: string): Promise<AuthUser> {
-  const res = await fetch(`${AUTH_BASE}/api/auth/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+): Promise<{ user: AuthUser | null; needsEmailConfirmation: boolean }> {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { role } },
   });
-  if (!res.ok) throw new Error("Not authenticated");
-  const data = await res.json();
-  return data.user;
+  if (error) throw new Error(error.message);
+  const user = toAuthUser(data.user);
+  return { user: data.session ? user : null, needsEmailConfirmation: !data.session };
 }
 
-// Attempts one token refresh, stores the new pair, returns the new access token.
-// Returns null and clears tokens if the refresh fails.
-export async function tryRefresh(): Promise<string | null> {
-  const rt = getRefreshToken();
-  if (!rt) return null;
-  try {
-    const pair = await apiRefresh(rt);
-    storeTokens(pair);
-    return pair.accessToken;
-  } catch {
-    clearTokens();
-    triggerAuthError();
-    return null;
-  }
+export async function signInWithGoogle(): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin },
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function signOut(): Promise<void> {
+  await supabase.auth.signOut();
 }

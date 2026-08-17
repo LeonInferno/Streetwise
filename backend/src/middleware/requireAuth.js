@@ -1,5 +1,5 @@
 import { UnauthorizedError } from "../lib/errors.js";
-import { authenticateAccessToken } from "../services/authService.js";
+import { getUserFromToken } from "../providers/supabase.js";
 
 /**
  * Pulls the token out of `Authorization: Bearer <token>`.
@@ -19,12 +19,10 @@ function readBearerToken(req) {
 
 /**
  * Gate for protected routes. On success attaches `req.auth`:
- *   { userId, username, sessionId }
+ *   { userId, email, role }
  *
- * Every failure is a 401 with a distinct code so the frontend knows what to do:
- *   missing_token / invalid_token  -> send the user to login
- *   token_expired                  -> try POST /api/auth/refresh first
- *   session_revoked                -> clear stored tokens, send to login
+ * `role` comes from Supabase's user_metadata, set at sign-up on the frontend —
+ * this backend never writes it, only reads it back.
  */
 export async function requireAuth(req, res, next) {
   try {
@@ -35,7 +33,20 @@ export async function requireAuth(req, res, next) {
         "Authorization: Bearer <token> header is required."
       );
     }
-    req.auth = await authenticateAccessToken(token);
+
+    const user = await getUserFromToken(token);
+    if (!user) {
+      throw new UnauthorizedError(
+        "invalid_token",
+        "Access token is not valid or has expired."
+      );
+    }
+
+    req.auth = {
+      userId: user.id,
+      email: user.email,
+      role: user.user_metadata?.role ?? null,
+    };
     next();
   } catch (err) {
     next(err);
