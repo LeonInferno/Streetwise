@@ -169,12 +169,19 @@ export default function Home() {
         <p className="mt-1.5">
           Hero photo by{" "}
           <a
-            href="https://unsplash.com/photos/Nyvq2juw4_o"
+            href="https://commons.wikimedia.org/wiki/User:King_of_Hearts"
             className="underline underline-offset-2 hover:text-[color:var(--text-secondary)]"
           >
-            Pedro Lastra
-          </a>{" "}
-          on Unsplash.
+            King of Hearts
+          </a>
+          , licensed{" "}
+          <a
+            href="https://creativecommons.org/licenses/by-sa/4.0"
+            className="underline underline-offset-2 hover:text-[color:var(--text-secondary)]"
+          >
+            CC BY-SA 4.0
+          </a>
+          , via Wikimedia Commons.
         </p>
       </footer>
     </main>
