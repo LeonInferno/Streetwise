@@ -52,3 +52,28 @@ export async function requireAuth(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * Attaches `req.auth` when a valid bearer token is present, but never blocks
+ * the request — a missing or invalid token just leaves `req.auth` unset.
+ *
+ * Used on the data routes to support the "first search free" flow: an
+ * anonymous visitor's request has no token and must still succeed, while a
+ * signed-in caller's still gets `req.auth` populated for anything downstream
+ * that wants it. The frontend is what decides when to stop letting an
+ * anonymous caller through, not this middleware.
+ */
+export async function optionalAuth(req, res, next) {
+  const token = readBearerToken(req);
+  if (!token) return next();
+
+  const user = await getUserFromToken(token);
+  if (user) {
+    req.auth = {
+      userId: user.id,
+      email: user.email,
+      role: user.user_metadata?.role ?? null,
+    };
+  }
+  next();
+}

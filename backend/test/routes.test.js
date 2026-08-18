@@ -42,20 +42,13 @@ vi.mock("../src/providers/ai/index.js", async (importOriginal) => {
 });
 
 // Auth is stubbed out here, for the same reason Socrata is: this file's subject
-// is the CONTRACT SHAPE, and requiring a real token would drag a mongod, a user
-// fixture, and a live cache into every assertion about response fields — the
-// cache alone would break the "exactly two upstream calls" tests.
-//
-// That the routes are actually protected is proven for real, against a real
-// mongod and real tokens, in auth.test.js. Neither file is complete alone.
+// is the CONTRACT SHAPE, and a real Supabase round trip on every request would
+// make these tests dependent on network + a live project. The data routes use
+// optionalAuth (see app.js), which this stub mirrors: it just attaches a fake
+// authenticated caller and always calls next(), same as a valid token would.
 vi.mock("../src/middleware/requireAuth.js", () => ({
-  requireAuth: (req, res, next) => {
-    req.auth = {
-      userId: "test-user",
-      username: "tester",
-      role: "tenant",
-      sessionId: "test-session",
-    };
+  optionalAuth: (req, res, next) => {
+    req.auth = { userId: "test-user", email: "tester@example.com", role: "tenant" };
     next();
   },
 }));

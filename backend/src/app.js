@@ -3,7 +3,7 @@ import { healthRouter } from "./routes/health.js";
 import { scoreRouter } from "./routes/score.js";
 import { complaintsRouter } from "./routes/complaints.js";
 import { explanationRouter } from "./routes/explanation.js";
-import { requireAuth } from "./middleware/requireAuth.js";
+import { optionalAuth } from "./middleware/requireAuth.js";
 import { HttpError } from "./lib/errors.js";
 import { BadRequestError } from "./lib/validate.js";
 
@@ -39,18 +39,17 @@ export function createApp() {
   // It exposes only "the process is up", which is not worth protecting.
   app.use(healthRouter);
 
-  // --- protected -----------------------------------------------------------
-  // Everything below needs `Authorization: Bearer <accessToken>`, issued by
-  // Supabase on the frontend. requireAuth verifies it against Supabase's Auth
-  // server; this app never issues or stores a credential itself.
-  app.use(requireAuth);
+  // --- data routes -----------------------------------------------------------
+  // Auth is OPTIONAL here, not required: the frontend gates most searches
+  // behind login, but that gate is a product decision made client-side (see
+  // ReportView's free-search check), not something these routes enforce. A
+  // request with a valid token still gets `req.auth` populated, in case a
+  // route wants it later.
+  app.use(optionalAuth);
   app.use(scoreRouter);
   app.use(complaintsRouter);
   app.use(explanationRouter);
 
-  // Deliberately BEHIND requireAuth: an unknown path returns 401 to an
-  // unauthenticated caller and 404 only to an authenticated one, so the API
-  // does not enumerate its own routes for anyone who asks.
   app.use((req, res) => {
     res.status(404).json({ error: "not_found" });
   });

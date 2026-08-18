@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { fetchExplanation, fetchNearbyComplaints, fetchReport, getLatLng } from "@/lib/api";
+import { hasUsedFreeSearch, markFreeSearchUsed } from "@/lib/freeSearch";
+import { useAuth } from "./AuthProvider";
 import { AddressSearch } from "./AddressSearch";
 import { MapPanel } from "./MapPanel";
 import { ReportSkeleton } from "./ReportSkeleton";
@@ -31,8 +33,13 @@ export function ReportView() {
   const searchParams = useSearchParams();
   const address = searchParams.get("address") ?? "";
   const placeId = searchParams.get("placeId") ?? undefined;
+  const { user, openLogin } = useAuth();
   const [result, setResult] = useState<LoadedReport | null>(null);
   const [errorState, setErrorState] = useState<{ address: string; message: string } | null>(null);
+  // Set when an anonymous visitor has already spent their one free report and
+  // tries another — blocks the fetch below rather than letting it run and
+  // just hiding the result, so a second search never touches the backend.
+  const [needsLogin, setNeedsLogin] = useState<{ address: string } | null>(null);
   // Only the *fetched* result lives in state; the rest is derived below. One
   // entry per tier, in tiersOf() order, and keyed by address so a stale result
   // cannot leak onto the next report.
@@ -43,6 +50,17 @@ export function ReportView() {
 
   useEffect(() => {
     if (!address) return;
+
+    // Anyone signed in searches freely; an anonymous visitor gets exactly one
+    // report before every further search requires logging in. This has to be
+    // decided here, not during render: hasUsedFreeSearch() reads localStorage,
+    // which doesn't exist during SSR, so resolving it any earlier risks a
+    // hydration mismatch instead of just an extra post-hydration render.
+    const gateThisAddress = !user && hasUsedFreeSearch();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
+    setNeedsLogin(gateThisAddress ? { address } : null);
+    if (gateThisAddress) return;
+
     let cancelled = false;
     (async () => {
       try {
@@ -60,6 +78,7 @@ export function ReportView() {
         data.blockQuality.recentComplaints = blockComplaints;
 
         if (cancelled) return;
+        if (!user) markFreeSearchUsed();
         setResult({ address, lat: coords.lat, lng: coords.lng, data });
       } catch (e) {
         if (cancelled) return;
@@ -69,7 +88,7 @@ export function ReportView() {
     return () => {
       cancelled = true;
     };
-  }, [address, placeId]);
+  }, [address, placeId, user]);
 
   // The AI explanation is the slow path, deliberately kept off the score
   // request: /api/score returns template text immediately, and each tier only
@@ -105,6 +124,7 @@ export function ReportView() {
 
   const report = result?.address === address ? result : null;
   const error = errorState?.address === address ? errorState.message : null;
+  const gated = needsLogin?.address === address;
 
   const aiExplanation = useMemo<AiExplanationState>(() => {
     if (!report) return { loading: false, tiers: [] };
@@ -142,6 +162,31 @@ export function ReportView() {
         </p>
         <div className="mt-4">
           <AddressSearch size="sm" />
+        </div>
+      </div>
+    );
+  }
+
+  if (gated) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center sm:px-6">
+        <p className="text-[color:var(--text-primary)]">
+          You&rsquo;ve used your free report.
+        </p>
+        <p className="mt-1.5 text-sm text-[color:var(--text-secondary)]">
+          Log in or sign up to keep searching Streetwise.
+        </p>
+        <button
+          onClick={openLogin}
+          className="mt-5 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ background: "var(--brand)" }}
+        >
+          Log in / Sign up
+        </button>
+        <div className="mt-3">
+          <Link href="/" className="text-sm underline text-[color:var(--text-secondary)]">
+            Back to search
+          </Link>
         </div>
       </div>
     );
