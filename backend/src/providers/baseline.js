@@ -5,7 +5,7 @@ import {
   BASELINE_ID,
   BUCKET_NAMES,
 } from "../config/constants.js";
-import { getDb, isMongoConfigured } from "./mongo.js";
+import { getDb, isMongoConfigured, dropConnection } from "./mongo.js";
 
 // Loads the citywide baseline the scorer compares against.
 //
@@ -57,6 +57,7 @@ async function readFromMongo() {
     return { ...doc, source: "mongo" };
   } catch (err) {
     console.warn("[baseline] mongo read failed:", err.message);
+    dropConnection();
     return null;
   }
 }
@@ -133,6 +134,7 @@ export async function saveBaseline(doc) {
     return true;
   } catch (err) {
     console.warn("[baseline] mongo write failed:", err.message);
+    dropConnection();
     return false;
   }
 }

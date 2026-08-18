@@ -4,7 +4,7 @@ import {
   CACHE_TTL_SECONDS,
   BUCKET_NAMES,
 } from "../config/constants.js";
-import { getDb, isMongoConfigured } from "./mongo.js";
+import { getDb, isMongoConfigured, dropConnection } from "./mongo.js";
 
 // Read/write for `complaint_cache`.
 //
@@ -115,6 +115,7 @@ export async function readEntries(lat, lng, radiusTiers) {
     return result;
   } catch (err) {
     console.warn("[cache] read failed, treating as miss:", err.message);
+    dropConnection();
     return result;
   }
 }
@@ -161,6 +162,7 @@ export async function writeCounts(lat, lng, radiusTier, counts, { now } = {}) {
     return true;
   } catch (err) {
     console.warn("[cache] write failed, continuing uncached:", err.message);
+    dropConnection();
     return false;
   }
 }
@@ -199,6 +201,7 @@ export async function writeExplanation(lat, lng, radiusTier, explanation, source
     return result.matchedCount > 0;
   } catch (err) {
     console.warn("[cache] explanation write failed:", err.message);
+    dropConnection();
     return false;
   }
 }

@@ -1,5 +1,5 @@
 import { ANONYMOUS_SEARCHES_COLLECTION } from "../config/constants.js";
-import { getDb, isMongoConfigured } from "./mongo.js";
+import { getDb, isMongoConfigured, dropConnection } from "./mongo.js";
 
 // Tracks which IPs have already spent their one login-free /api/score search.
 //
@@ -50,6 +50,7 @@ export async function hasUsedFreeSearch(ip) {
     return Boolean(doc);
   } catch (err) {
     console.warn("[anonymousSearch] read failed, treating as not-yet-used:", err.message);
+    dropConnection();
     return false;
   }
 }
@@ -74,6 +75,7 @@ export async function markFreeSearchUsed(ip) {
     return true;
   } catch (err) {
     console.warn("[anonymousSearch] write failed:", err.message);
+    dropConnection();
     return false;
   }
 }
