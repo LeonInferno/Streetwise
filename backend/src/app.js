@@ -16,6 +16,12 @@ const COMPLAINTS_HEADERS = ["X-Complaints-Truncated", "X-Complaints-Limit"];
  */
 export function createApp() {
   const app = express();
+  // Vercel (and any reverse proxy) puts the real client IP in X-Forwarded-For;
+  // without this, req.ip resolves to the proxy's address for every request,
+  // which would make the per-IP free-search limit apply to nobody in
+  // particular. `true` trusts the immediate proxy hop, which is exactly what
+  // sits in front of this app in every deployment target it runs on.
+  app.set("trust proxy", true);
   app.use(express.json());
 
   // Frontend is served from a different origin during development.

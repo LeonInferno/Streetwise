@@ -17,10 +17,20 @@ import {
 // That is deliberate — this file's job is to prove the wiring produces the
 // contract shape from real code, not to re-test the client.
 
-const { countsSpy, complaintsSpy, aiSpy } = vi.hoisted(() => ({
+const {
+  countsSpy,
+  complaintsSpy,
+  aiSpy,
+  authMock,
+  hasUsedFreeSearchSpy,
+  markFreeSearchUsedSpy,
+} = vi.hoisted(() => ({
   countsSpy: vi.fn(),
   complaintsSpy: vi.fn(),
   aiSpy: vi.fn(),
+  authMock: vi.fn(),
+  hasUsedFreeSearchSpy: vi.fn(),
+  markFreeSearchUsedSpy: vi.fn(),
 }));
 
 vi.mock("../src/providers/socrata.js", async (importOriginal) => {
@@ -44,13 +54,20 @@ vi.mock("../src/providers/ai/index.js", async (importOriginal) => {
 // Auth is stubbed out here, for the same reason Socrata is: this file's subject
 // is the CONTRACT SHAPE, and a real Supabase round trip on every request would
 // make these tests dependent on network + a live project. The data routes use
-// optionalAuth (see app.js), which this stub mirrors: it just attaches a fake
-// authenticated caller and always calls next(), same as a valid token would.
+// optionalAuth (see app.js); authMock mirrors it, defaulting (in beforeEach)
+// to attaching a fake authenticated caller, same as a valid token would.
+// Individual tests override it to simulate an anonymous caller.
 vi.mock("../src/middleware/requireAuth.js", () => ({
-  optionalAuth: (req, res, next) => {
-    req.auth = { userId: "test-user", email: "tester@example.com", role: "tenant" };
-    next();
-  },
+  optionalAuth: (req, res, next) => authMock(req, res, next),
+}));
+
+// The free-search IP check is mocked for the same reason: it is its own
+// provider with its own test file (anonymousSearch.test.js, against a real
+// mongod). Defaulting to "not yet used" keeps every existing test in this
+// file behaving as an unrestricted caller; the dedicated tests below flip it.
+vi.mock("../src/providers/anonymousSearch.js", () => ({
+  hasUsedFreeSearch: hasUsedFreeSearchSpy,
+  markFreeSearchUsed: markFreeSearchUsedSpy,
 }));
 
 const { SocrataError } = await import("../src/providers/socrata.js");
@@ -89,6 +106,13 @@ beforeEach(() => {
   complaintsSpy.mockImplementation(async (lat, lng, radius, { limit }) =>
     Array.from({ length: Math.min(25, limit) }, (_, i) => complaintRow(i))
   );
+
+  authMock.mockReset().mockImplementation((req, res, next) => {
+    req.auth = { userId: "test-user", email: "tester@example.com", role: "tenant" };
+    next();
+  });
+  hasUsedFreeSearchSpy.mockReset().mockResolvedValue(false);
+  markFreeSearchUsedSpy.mockReset().mockResolvedValue(true);
 });
 
 describe("GET /health", () => {
@@ -244,6 +268,58 @@ describe("POST /api/score", () => {
       body: { lat: 34.05, lng: -118.24 },
     });
     expect(countsSpy).not.toHaveBeenCalled();
+  });
+
+  describe("free search (anonymous callers)", () => {
+    // An anonymous caller has no token, so optionalAuth leaves req.auth unset —
+    // simulated here by having the mock skip attaching it, same as a real
+    // request with no Authorization header would produce.
+    function goAnonymous() {
+      authMock.mockImplementation((req, res, next) => next());
+    }
+
+    it("allows a first-time anonymous IP through and marks it used", async () => {
+      goAnonymous();
+      hasUsedFreeSearchSpy.mockResolvedValue(false);
+
+      const { status } = await server.request("/api/score", {
+        method: "POST",
+        body: { lat: 40.7484, lng: -73.9857 },
+      });
+
+      expect(status).toBe(200);
+      expect(markFreeSearchUsedSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("401s an anonymous IP that has already used its free search", async () => {
+      goAnonymous();
+      hasUsedFreeSearchSpy.mockResolvedValue(true);
+
+      const { status, body } = await server.request("/api/score", {
+        method: "POST",
+        body: { lat: 40.7484, lng: -73.9857 },
+      });
+
+      expect(status).toBe(401);
+      expect(body.error).toBe("free_search_used");
+      // Blocked before ever reaching the upstream/scoring path.
+      expect(countsSpy).not.toHaveBeenCalled();
+      expect(markFreeSearchUsedSpy).not.toHaveBeenCalled();
+    });
+
+    it("never consults or writes the IP log for a signed-in caller", async () => {
+      // authMock's default (set in beforeEach) attaches req.auth.
+      hasUsedFreeSearchSpy.mockResolvedValue(true); // would 401 an anonymous caller
+
+      const { status } = await server.request("/api/score", {
+        method: "POST",
+        body: { lat: 40.7484, lng: -73.9857 },
+      });
+
+      expect(status).toBe(200);
+      expect(hasUsedFreeSearchSpy).not.toHaveBeenCalled();
+      expect(markFreeSearchUsedSpy).not.toHaveBeenCalled();
+    });
   });
 });
 

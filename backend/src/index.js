@@ -1,5 +1,6 @@
 import { createApp } from "./app.js";
 import { ensureCacheIndexes } from "./providers/cache.js";
+import { ensureAnonymousSearchIndexes } from "./providers/anonymousSearch.js";
 import { closeMongo, isMongoConfigured } from "./providers/mongo.js";
 import { loadBaseline } from "./providers/baseline.js";
 import { isSupabaseConfigured } from "./providers/supabase.js";
@@ -41,6 +42,10 @@ const server = app.listen(PORT, () => {
 ensureCacheIndexes()
   .then(() => console.log("[cache] indexes ready"))
   .catch((err) => console.warn("[cache] index setup failed:", err.message));
+
+ensureAnonymousSearchIndexes()
+  .then(() => console.log("[anonymousSearch] indexes ready"))
+  .catch((err) => console.warn("[anonymousSearch] index setup failed:", err.message));
 
 if (isMockMode()) {
   console.warn("[mode] USE_MOCK_DATA is set — serving MOCK data, not live 311");

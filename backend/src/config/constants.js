@@ -195,6 +195,9 @@ export const CACHE_COLLECTION = "complaint_cache";
 export const BASELINE_COLLECTION = "baseline";
 export const BASELINE_ID = "v1";
 
+/** One doc per IP that has spent its login-free /api/score search. */
+export const ANONYMOUS_SEARCHES_COLLECTION = "anonymous_searches";
+
 // ---------------------------------------------------------------------------
 // Baseline sampling (scripts/buildBaseline.js)
 // ---------------------------------------------------------------------------
