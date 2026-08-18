@@ -25,11 +25,19 @@ scoreRouter.post("/api/score", async (req, res, next) => {
   try {
     const { lat, lng } = validateCoords(req.body ?? {});
 
-    if (!req.auth && (await hasUsedFreeSearch(req.ip))) {
-      throw new UnauthorizedError(
-        "free_search_used",
-        "You've used your free search. Log in to keep searching."
-      );
+    if (!req.auth) {
+      const alreadyUsed = await hasUsedFreeSearch(req.ip);
+      // Temporary visibility while the IP-based limit is being verified in
+      // production — remove once it's confirmed reliable. req.ip depends on
+      // `trust proxy` reading X-Forwarded-For correctly, which is exactly the
+      // kind of thing that's obvious in a log line and invisible otherwise.
+      console.log(`[freeSearch] ip=${req.ip} alreadyUsed=${alreadyUsed}`);
+      if (alreadyUsed) {
+        throw new UnauthorizedError(
+          "free_search_used",
+          "You've used your free search. Log in to keep searching."
+        );
+      }
     }
 
     const report = await buildScoreReport(lat, lng);
