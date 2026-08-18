@@ -54,6 +54,13 @@ export async function getDb() {
         // requests ever hit a stale one in the first place; dropConnection()
         // below is what recovers the ones that still do.
         maxIdleTimeMS: 10000,
+        // Forces IPv4. The SSL failure seen from Vercel (a generic "TLS
+        // internal error" alert, not a clear connection error) but never
+        // locally is the classic symptom of a serverless platform with
+        // broken/blackholed IPv6 egress — the driver picks an AAAA record,
+        // the TCP handshake never completes cleanly, and what surfaces is a
+        // confusing TLS-layer failure instead of an obvious network one.
+        family: 4,
       });
       await client.connect();
       activeClient = client;

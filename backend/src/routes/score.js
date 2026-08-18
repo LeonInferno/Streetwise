@@ -31,7 +31,10 @@ scoreRouter.post("/api/score", async (req, res, next) => {
       // production — remove once it's confirmed reliable. req.ip depends on
       // `trust proxy` reading X-Forwarded-For correctly, which is exactly the
       // kind of thing that's obvious in a log line and invisible otherwise.
-      console.log(`[freeSearch] ip=${req.ip} alreadyUsed=${alreadyUsed}`);
+      // console.warn, not console.log — Vercel's Runtime Logs only reliably
+      // surface warn/error level output, confirmed by console.log lines
+      // elsewhere in this same route never once appearing there.
+      console.warn(`[freeSearch] ip=${req.ip} alreadyUsed=${alreadyUsed}`);
       if (alreadyUsed) {
         throw new UnauthorizedError(
           "free_search_used",
