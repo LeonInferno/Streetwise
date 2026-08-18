@@ -11,14 +11,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "baseline": "node --env-file-if-exists=.env scripts/buildBaseline.js",
-    "user:create": "node --env-file-if-exists=.env scripts/createUser.js",
     "verify:dataset": "node --env-file-if-exists=.env scripts/verifyDataset.js",
     "verify:cache": "node --env-file-if-exists=.env scripts/verifyCache.js",
     "verify:scoring": "node --env-file-if-exists=.env scripts/verifyScoring.js",
     "verify:explanations": "node --env-file-if-exists=.env scripts/verifyExplanations.js"
   },
   "engines": {
-    "node": ">=20.6"
+    "node": "20.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
